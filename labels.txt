@@ -1,0 +1,2 @@
+0 LETRA "A"
+1 LETRA "B"
