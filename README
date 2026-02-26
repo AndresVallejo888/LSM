@@ -6,4 +6,5 @@ Este sistema utiliza MediaPipe para detectar el esqueleto de la mano y un modelo
 2. Crear un entorno virtual: `python -m venv env`
 3. Activar el entorno: `.\env\Scripts\activate`
 4. Instalar librerías: `pip install -r requirements.txt`
+----Instalar si no funciona tambien : pip install mediapipe tensorflow opencv-python----
 5. Ejecutar: `python main_app.py`
