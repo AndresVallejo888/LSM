@@ -1,0 +1,9 @@
+# Proyecto LSM con IA
+Este sistema utiliza MediaPipe para detectar el esqueleto de la mano y un modelo TFLite para clasificar señas.
+
+## 🚀 Cómo instalar
+1. Clonar el repositorio.
+2. Crear un entorno virtual: `python -m venv env`
+3. Activar el entorno: `.\env\Scripts\activate`
+4. Instalar librerías: `pip install -r requirements.txt`
+5. Ejecutar: `python main_app.py`
