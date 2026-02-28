@@ -1,37 +1,43 @@
 import os
 import sys
+import math
+import time
 
-# Desactivar avisos de TensorFlow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 import cv2
 import numpy as np
 import tensorflow as tf
+import pyautogui
+import screen_brightness_control as sbc
 
-# --- TRUCO PARA MEDIAPIPE EN WINDOWS ---
+pyautogui.FAILSAFE = False 
+screen_w, screen_h = pyautogui.size()
+
+clases = [
+    "NEUTRAL", "MODO_CONFIG", "MODO_PANTALLA", "SUBIR_BRILLO", 
+    "BAJAR_BRILLO", "SUBIR_VOLUMEN", "BAJAR_VOLUMEN", 
+    "CERRAR_VENTANA", "ABRIR_VENTANA", "MENU"
+]
+
 try:
     import mediapipe as mp
-    # Intentamos cargar las soluciones de forma ultra-directa
-    from mediapipe.python.solutions import hands as mp_hands
-    from mediapipe.python.solutions import drawing_utils as mp_drawing
-    print("✅ MediaPipe cargado con exito")
+    mp_hands = mp.solutions.hands
+    mp_drawing = mp.solutions.drawing_utils
+    print("✅ MediaPipe cargado con éxito")
 except Exception as e:
     print(f"❌ Error al cargar MediaPipe: {e}")
     sys.exit()
 
-# --- CARGAR MODELO TFLITE ---
 try:
-    # Usamos labels2.txt y model_unquant2.tflite
-    interpreter = tf.lite.Interpreter(model_path="model_unquant2.tflite")
+    interpreter = tf.lite.Interpreter(model_path="modelo_gestos.tflite")
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
-    class_names = [line.strip() for line in open("labels2.txt", "r").readlines()]
 except Exception as e:
     print(f"❌ Error con archivos del modelo: {e}")
     sys.exit()
 
-# Configurar el detector
 hands_detector = mp_hands.Hands(
     static_image_mode=False,
     max_num_hands=1,
@@ -40,61 +46,136 @@ hands_detector = mp_hands.Hands(
 )
 
 cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-estado = 'menu'
-letras_disponibles = ["A", "B", "C"]
-indice_letra = 0
+
+estado = 'MENU_PRINCIPAL'
+ultimo_comando = 0
+cooldown_tiempo = 1.5 
+
+print("🚀 Sistema de control por gestos iniciado. Presiona 'q' para salir.")
 
 while True:
     ret, frame = cap.read()
     if not ret: break
     
     frame = cv2.flip(frame, 1)
-    key = cv2.waitKey(1) & 0xFF
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    res = hands_detector.process(rgb)
+    nombre_sena = "Ninguna"
 
-    if estado == 'menu':
-        frame[:] = (40, 40, 40)
-        cv2.putText(frame, "LSM PRO - VENV ACTIVO", (70, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        cv2.putText(frame, "1. APRENDER | 2. PRACTICAR", (120, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        if key == ord('1'): estado = 'aprender'
-        if key == ord('2'): estado = 'practicar'
-
-    elif estado == 'aprender':
-        letra = letras_disponibles[indice_letra]
-        img_guia = cv2.imread(f"imagenes_lsm/{letra}.jpg")
-        if img_guia is not None:
-            img_guia = cv2.resize(img_guia, (200, 200))
-            frame[50:250, 50:250] = img_guia
-        cv2.putText(frame, f"LETRA: {letra}", (280, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-        if key == ord('d'): indice_letra = (indice_letra + 1) % len(letras_disponibles)
-        if key == ord('a'): indice_letra = (indice_letra - 1) % len(letras_disponibles)
-        if key == ord('m'): estado = 'menu'
-
-    elif estado == 'practicar':
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        res = hands_detector.process(rgb)
-
-        if res.multi_hand_landmarks:
-            for hand_lms in res.multi_hand_landmarks:
-                mp_drawing.draw_landmarks(frame, hand_lms, mp_hands.HAND_CONNECTIONS)
-                
-                # Prediccion
-                roi = cv2.resize(frame, (224, 224))
-                roi = np.expand_dims(roi, axis=0).astype(np.float32)
-                roi = (roi / 127.5) - 1
-                
-                interpreter.set_tensor(input_details[0]['index'], roi)
-                interpreter.invoke()
-                out = interpreter.get_tensor(output_details[0]['index'])
+    if res.multi_hand_landmarks:
+        for hand_lms in res.multi_hand_landmarks:
+            mp_drawing.draw_landmarks(frame, hand_lms, mp_hands.HAND_CONNECTIONS)
+            
+            # 1. Predicción con coordenadas numéricas en lugar de imagen
+            base_x = hand_lms.landmark[0].x
+            base_y = hand_lms.landmark[0].y
+            
+            coords = []
+            for i in range(21):
+                coords.append(hand_lms.landmark[i].x - base_x)
+                coords.append(hand_lms.landmark[i].y - base_y)
+            
+            input_data = np.array([coords], dtype=np.float32)
+            interpreter.set_tensor(input_details[0]['index'], input_data)
+            interpreter.invoke()
+            out = interpreter.get_tensor(output_details[0]['index'])
+            
+            # Añadir un umbral de confianza para evitar detecciones erróneas
+            if np.max(out[0]) > 0.80:
                 idx = np.argmax(out[0])
+                nombre_sena = clases[idx]
+            else:
+                nombre_sena = "NEUTRAL"
+            
+            cv2.putText(frame, f"Sena: {nombre_sena} ({np.max(out[0])*100:.1f}%)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+            # 2. Extraer coordenadas para el mouse
+            h, w, _ = frame.shape
+            x_indice = int(hand_lms.landmark[8].x * w)
+            y_indice = int(hand_lms.landmark[8].y * h)
+            x_pulgar = int(hand_lms.landmark[4].x * w)
+            y_pulgar = int(hand_lms.landmark[4].y * h)
+
+    tiempo_actual = time.time()
+    puede_ejecutar = (tiempo_actual - ultimo_comando) > cooldown_tiempo
+
+    # 3. MÁQUINA DE ESTADOS
+    if estado == 'MENU_PRINCIPAL':
+        cv2.putText(frame, "--- MENU PRINCIPAL ---", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+        cv2.putText(frame, "Haz MODO_CONFIG o MODO_PANTALLA", (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+        
+        if puede_ejecutar:
+            if nombre_sena == "MODO_CONFIG":
+                estado = 'CONFIGURACION'
+                ultimo_comando = tiempo_actual
+            elif nombre_sena == "MODO_PANTALLA":
+                estado = 'PANTALLA'
+                ultimo_comando = tiempo_actual
+
+    elif estado == 'CONFIGURACION':
+        cv2.putText(frame, "--- MODO CONFIGURACION ---", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+        
+        if puede_ejecutar:
+            if nombre_sena == "SUBIR_BRILLO":
+                try:
+                    b_actual = sbc.get_brightness()[0]
+                    sbc.set_brightness(min(100, b_actual + 15))
+                except: pass
+                ultimo_comando = tiempo_actual
                 
-                nombre = "".join([i for i in class_names[idx] if not i.isdigit()]).strip()
-                cv2.putText(frame, f"Detectado: {nombre}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        else:
-            cv2.putText(frame, "No veo la mano", (100, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            elif nombre_sena == "BAJAR_BRILLO":
+                try:
+                    b_actual = sbc.get_brightness()[0]
+                    sbc.set_brightness(max(0, b_actual - 15))
+                except: pass
+                ultimo_comando = tiempo_actual
+                
+            elif nombre_sena == "SUBIR_VOLUMEN":
+                pyautogui.press('volumeup', presses=5) 
+                ultimo_comando = tiempo_actual
+                
+            elif nombre_sena == "BAJAR_VOLUMEN":
+                pyautogui.press('volumedown', presses=5)
+                ultimo_comando = tiempo_actual
+            
+            elif nombre_sena == "CERRAR_VENTANA": ## utilice cerrar ventana como mute
+                pyautogui.press('volumemute')
+                ultimo_comando = tiempo_actual
+                
+            elif nombre_sena == "MENU":
+                estado = 'MENU_PRINCIPAL'
+                ultimo_comando = tiempo_actual
 
-        if key == ord('m'): estado = 'menu'
+    elif estado == 'PANTALLA':
+        cv2.putText(frame, "--- MODO PANTALLA ---", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 255), 2)
+        
+        if res.multi_hand_landmarks:
+            mouse_x = np.interp(x_indice, [0, w], [0, screen_w])
+            mouse_y = np.interp(y_indice, [0, h], [0, screen_h])
+            pyautogui.moveTo(mouse_x, mouse_y)
+            
+            distancia_click = math.hypot(x_indice - x_pulgar, y_indice - y_pulgar)
+            if distancia_click < 30:
+                if (tiempo_actual - ultimo_comando) > 0.5: 
+                    pyautogui.click()
+                    cv2.putText(frame, "CLICK!", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+                    ultimo_comando = tiempo_actual
 
-    cv2.imshow("LSM Pro v3.2", frame)
+        if puede_ejecutar:
+            if nombre_sena == "ABRIR_VENTANA":
+                pyautogui.hotkey('win', 'e') 
+                ultimo_comando = tiempo_actual
+            elif nombre_sena == "MENU":
+                estado = 'MENU_PRINCIPAL'
+                ultimo_comando = tiempo_actual
+
+    if not puede_ejecutar:
+        tiempo_restante = cooldown_tiempo - (tiempo_actual - ultimo_comando)
+        cv2.putText(frame, f"Espera: {tiempo_restante:.1f}s", (10, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+    cv2.imshow("Control PC por Gestos", frame)
+    
+    key = cv2.waitKey(1) & 0xFF
     if key == ord('q'): break
 
 cap.release()
