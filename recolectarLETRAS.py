@@ -19,11 +19,16 @@ clases = [
     "U", 
     "ESPACIO", 
     "BORRAR", 
-    "OK"
+    "OK",
+    "J",
+    "K",
+    "Q",
+    "X",
+    "Z"
 ]
 
 
-clase_actual = 8  
+clase_actual = 13  
 
 if not os.path.exists(archivo_csv):
     with open(archivo_csv, mode='w', newline='') as f:
