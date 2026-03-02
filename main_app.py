@@ -17,7 +17,7 @@ screen_w, screen_h = pyautogui.size()
 clases_gestos = [
     "NEUTRAL", "MODO_CONFIG", "MODO_PANTALLA", "SUBIR_BRILLO", 
     "BAJAR_BRILLO", "SUBIR_VOLUMEN", "BAJAR_VOLUMEN", "CERRAR_VENTANA",
-    "ABRIR_VENTANA", "MENU", "TECLADO", "MUTE", "SCREENSHOT"
+    "ABRIR_VENTANA", "MENU", "TECLADO"
 ]
 
 clases_teclado = [
@@ -155,14 +155,6 @@ while True:
                 ultimo_comando = tiempo_actual
             elif nombre_sena == "BAJAR_VOLUMEN":
                 pyautogui.press('volumedown', presses=3)
-                ultimo_comando = tiempo_actual
-            elif nombre_sena == "MUTE":
-                pyautogui.press('volumemute')
-                ultimo_comando = tiempo_actual
-            elif nombre_sena == "SCREENSHOT":
-                pyautogui.hotkey('win', 'prtscr')
-                # Dibujamos un destello blanco rápido en pantalla para feedback visual
-                frame[:] = 255 
                 ultimo_comando = tiempo_actual
             elif nombre_sena == "MENU":
                 estado = 'MENU_PRINCIPAL'
