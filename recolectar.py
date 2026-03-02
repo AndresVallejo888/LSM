@@ -21,12 +21,14 @@ clases = [
     "CERRAR_VENTANA", 
     "ABRIR_VENTANA", 
     "MENU",
-    "TECLADO"
+    "TECLADO",
+    "MUTE",
+    "SCREENSHOT"
 ] 
 
 # 2. Cambia este número para elegir qué seña vas a grabar en este momento
 # 0 = NEUTRAL, 1 = MODO_CONFIG, 2 = MODO_PANTALLA, etc.
-clase_actual = 10  
+clase_actual = 12  
 
 if not os.path.exists(archivo_csv):
     with open(archivo_csv, mode='w', newline='') as f:
