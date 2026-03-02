@@ -10,25 +10,15 @@ hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_c
 archivo_csv = 'datasetLETRAS.csv'
 
 # 1. Define aquí los nombres de todas tus señas
+# En recolectarLETRAS.py
 clases = [
-    "NEUTRAL", 
-    "A", 
-    "E", 
-    "I", 
-    "O", 
-    "U", 
-    "ESPACIO", 
-    "BORRAR", 
-    "OK",
-    "J",
-    "K",
-    "Q",
-    "X",
-    "Z"
+    "NEUTRAL", "A", "E", "I", "O", "U", 
+    "ESPACIO", "BORRAR", "OK", "J", "K", "Q", "X", "Z", 
+    "B", "C", "D", "F", "G", "H", "L", "M", "N", "P", 
+    "R", "S", "T", "V", "W", "Y", "RANDOM_MOV"
 ]
 
-
-clase_actual = 13  
+clase_actual = 30
 
 if not os.path.exists(archivo_csv):
     with open(archivo_csv, mode='w', newline='') as f:

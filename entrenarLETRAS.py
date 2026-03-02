@@ -24,7 +24,7 @@ model = tf.keras.models.Sequential([
     tf.keras.layers.Dense(128, activation='relu'),
     tf.keras.layers.Dropout(0.2),
     tf.keras.layers.Dense(64, activation='relu'),
-    tf.keras.layers.Dense(14, activation='softmax') # 9 clases en total (0-8)
+    tf.keras.layers.Dense(31, activation='softmax') # 9 clases en total (0-8)
 ])
 
 model.compile(optimizer='adam',
