@@ -18,7 +18,7 @@ clases = [
     "R", "S", "T", "V", "W", "Y", "RANDOM_MOV"
 ]
 
-clase_actual = 30
+clase_actual = 24
 
 if not os.path.exists(archivo_csv):
     with open(archivo_csv, mode='w', newline='') as f:
