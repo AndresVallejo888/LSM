@@ -191,7 +191,7 @@ while True:
 
     elif estado == 'TECLADO':
         cv2.putText(frame, "MODO ESCRITURA | 'OK' para salir", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 1)
-        if puede_ejecutar and nombre_sena not in ["NEUTRAL"]:
+        if puede_ejecutar and nombre_sena not in ["NEUTRAL", "NADA"]:
             if nombre_sena == "OK":
                 estado = 'PANTALLA'
             elif nombre_sena == "ESPACIO":
