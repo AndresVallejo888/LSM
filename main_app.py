@@ -13,10 +13,10 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 pyautogui.FAILSAFE = False 
 screen_w, screen_h = pyautogui.size()
 
-# --- DEFINICIÓN DE CLASES (Basadas en los nuevos modelos) ---
+# --- DEFINICIÓN DE CLASES ---
 clases_gestos = [
     "NEUTRAL", "MODO_CONFIG", "MODO_PANTALLA", "SUBIR_BRILLO", 
-    "BAJAR_BRILLO", "SUBIR_VOLUMEN", "BAJAR_VOLUMEN", "CERRAR_VENTANA",
+    "BAJAR_BRILLO", "SUBIR_VOLUMEN", "BAJAR_VOLUMEN", "DESACTIVAR",
     "ABRIR_VENTANA", "MENU", "TECLADO", "MUTE", "SCREENSHOT"
 ]
 
@@ -49,7 +49,6 @@ def cargar_modelo(ruta):
         print(f"❌ Error con el archivo {ruta}: {e}")
         sys.exit()
 
-# Carga de modelos avanzados del compañero
 int_gestos = cargar_modelo("modelo_gestos.tflite")
 int_teclado = cargar_modelo("modelo_teclado.tflite")
 print("✅ Modelos de coordenadas cargados con éxito")
@@ -78,15 +77,15 @@ while True:
     nombre_sena = "NEUTRAL"
     prob_sena = 0
 
-    # Selección de modelo según el estado   
-    if estado == 'TECLADO':
+    # Selección de modelo 
+    if estado in ['TECLADO', 'APLICACIONES']:
         interpreter = int_teclado
         clases_actuales = clases_teclado
-        cooldown_tiempo = 2.0  # Delay para escritura
+        cooldown_tiempo = 2.0
     else:
         interpreter = int_gestos
         clases_actuales = clases_gestos
-        cooldown_tiempo = 1.0  # Delay para navegación
+        cooldown_tiempo = 1.0
 
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
@@ -95,7 +94,6 @@ while True:
         for hand_lms in res.multi_hand_landmarks:
             mp_drawing.draw_landmarks(frame, hand_lms, mp_hands.HAND_CONNECTIONS)
             
-            # --- PREDICCIÓN BASADA EN LANDMARKS (Coordenadas) ---
             base_x = hand_lms.landmark[0].x
             base_y = hand_lms.landmark[0].y
             
@@ -114,23 +112,22 @@ while True:
                 idx = np.argmax(out[0])
                 nombre_sena = clases_actuales[idx]
             
-            # Variables para Mouse
             x_indice = int(hand_lms.landmark[8].x * w)
             y_indice = int(hand_lms.landmark[8].y * h)
             x_pulgar = int(hand_lms.landmark[4].x * w)
             y_pulgar = int(hand_lms.landmark[4].y * h)
 
-    # Lógica de tiempos
     tiempo_actual = time.time()
     puede_ejecutar = (tiempo_actual - ultimo_comando) > cooldown_tiempo
 
-    # UI: HUD Principal
-    cv2.rectangle(frame, (0, 0), (w, 50), (0, 0, 0), -1)
+    # UI: HUD Principal con fondo negro para mayor legibilidad
+    cv2.rectangle(frame, (0, 0), (w, 50), (0, 0, 0), -1)       # Barra superior
+    cv2.rectangle(frame, (0, 60), (w, 105), (0, 0, 0), -1)     # Barra de instrucciones
     cv2.putText(frame, f"ESTADO: {estado} | SENA: {nombre_sena}", (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
     # --- MÁQUINA DE ESTADOS ---
     if estado == 'MENU_PRINCIPAL':
-        cv2.putText(frame, "Posa 'MODO_CONFIG' o 'MODO_PANTALLA'", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+        cv2.putText(frame, "Posa 'CONFIG', 'PANTALLA', 'ABRIR_VENTANA' o 'DESACTIVAR' (Pausar)", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
         if puede_ejecutar:
             if nombre_sena == "MODO_CONFIG":
                 estado = 'CONFIGURACION'
@@ -138,9 +135,21 @@ while True:
             elif nombre_sena == "MODO_PANTALLA":
                 estado = 'PANTALLA'
                 ultimo_comando = tiempo_actual
+            elif nombre_sena == "ABRIR_VENTANA":
+                estado = 'APLICACIONES'
+                ultimo_comando = tiempo_actual
+            elif nombre_sena == "DESACTIVAR": # Usamos esta seña sin uso para pausar
+                estado = 'DESACTIVADO'
+                ultimo_comando = tiempo_actual
+
+    elif estado == 'DESACTIVADO':
+        cv2.putText(frame, "SISTEMA EN PAUSA | Posa 'DESACTIVAR' para reactivar", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        if puede_ejecutar and nombre_sena == "DESACTIVAR":
+            estado = 'MENU_PRINCIPAL'
+            ultimo_comando = tiempo_actual
 
     elif estado == 'CONFIGURACION':
-        cv2.putText(frame, "BRILLO / VOLUMEN | 'MENU' para salir", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1)
+        cv2.putText(frame, "BRILLO / VOLUMEN / MUTE / SCREENSHOT | 'MENU' para salir", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
         if puede_ejecutar:
             if nombre_sena == "SUBIR_BRILLO":
                 try: sbc.set_brightness(min(100, sbc.get_brightness()[0] + 15))
@@ -168,13 +177,12 @@ while True:
                 ultimo_comando = tiempo_actual
 
     elif estado == 'PANTALLA':
-        cv2.putText(frame, "MOUSE ACTIVO | Juntar dedos: CLICK", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 1)
+        cv2.putText(frame, "MOUSE ACTIVO | Juntar dedos: CLICK | 'MENU' para salir", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
         if res.multi_hand_landmarks:
             mouse_x = np.interp(x_indice, [0, w], [0, screen_w])
             mouse_y = np.interp(y_indice, [0, h], [0, screen_h])
             pyautogui.moveTo(mouse_x, mouse_y, duration=0.1)
             
-            # Click por cercanía de dedos
             if math.hypot(x_indice - x_pulgar, y_indice - y_pulgar) < 30:
                 if (tiempo_actual - ultimo_comando) > 0.6: 
                     pyautogui.click()
@@ -190,7 +198,7 @@ while True:
                 ultimo_comando = tiempo_actual
 
     elif estado == 'TECLADO':
-        cv2.putText(frame, "MODO ESCRITURA | 'OK' para salir", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 1)
+        cv2.putText(frame, "MODO ESCRITURA | 'OK' para salir", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
         if puede_ejecutar and nombre_sena not in ["NEUTRAL", "NADA"]:
             if nombre_sena == "OK":
                 estado = 'PANTALLA'
@@ -200,6 +208,21 @@ while True:
                 pyautogui.press('backspace')
             else:
                 pyautogui.write(nombre_sena.lower())
+            ultimo_comando = tiempo_actual
+
+    elif estado == 'APLICACIONES':
+        cv2.putText(frame, "APPS: C(Chrome) S(Spotify) V(Code) D(Directorio) | 'OK' salir", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+        if puede_ejecutar and nombre_sena not in ["NEUTRAL", "NADA"]:
+            if nombre_sena == "C":
+                os.system("start chrome")
+            elif nombre_sena == "S":
+                os.system("start spotify")
+            elif nombre_sena == "V":
+                os.system("code")
+            elif nombre_sena == "D":
+                os.system("explorer")
+            elif nombre_sena == "OK":
+                estado = 'MENU_PRINCIPAL'
             ultimo_comando = tiempo_actual
 
     # Barra de Cooldown (Visual)
